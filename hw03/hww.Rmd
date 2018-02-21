@@ -1,0 +1,324 @@
+---
+title: "Hww"
+author: "Kacie Kang"
+date: "2/20/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Winter Olympics Medals over Time
+
+1. Medal Counts over Time
+
+replace the old country names with new names.
+```{r}
+library(tidyverse)
+library(plyr)
+winter <- read.csv("data/winter.csv")
+
+winter$Country<- revalue(winter$Country, c("EUN"="RUS","URS"="RUS"))
+winter$Country<- revalue(winter$Country, c("EUA"="GER","FRG"="GER","GDR"="GER"))
+winter$Country<- revalue(winter$Country, c("YUG"="SCG"))
+winter$Country<- revalue(winter$Country, c("TCH"="SVK"))
+winter$Country<- revalue(winter$Country, c("ROU"="ROM"))
+
+
+winter
+
+```
+
+ bonus point
+ count team medals as single one By deleting the same names
+
+```{r}
+
+winter2=winter [!duplicated(winter[c("Year", "City", "Sport", "Discipline", "Country", "Gender", "Event", "Medal" )]),]
+winter2
+```
+library(magrittr)  
+  # this is for the chain operator %>%
+  # also contained in the tidyverse package
+ Merge two spreadsheets, Calculate a summary of how many winter games each country competed in medaled in  and how many medals of each type the country won. 
+```{r}
+dictionary <- read.csv("data/dictionary.csv")
+
+mydata <- merge(x=dictionary,y= winter, by.x=c('Code'), by.y=c('Country'))
+
+alldata <- mydata  %>% 
+     group_by(Country,Medal)  %>% 
+     dplyr::summarise(Number = n())
+
+Total <- mydata  %>%
+  group_by(Country)  %>%
+  dplyr::summarise(Total = n())  %>%
+  arrange(desc(Total))  %>%
+  dplyr::mutate(rank=row_number()) 
+
+medalsum <-ggplot(Total, aes(x=Country, y=Total)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity")  + ylab("Medal Sum") 
+
+gsbsum <-ggplot(alldata, aes(x=Country, y=Number, fill=Medal)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity") + coord_flip() + ylab("Medal sum by gsb") 
+
+alldata
+mydata
+medalsum
+gsbsum
+```
+
+top10 countries
+and #6, I used label here
+ 
+```{r}
+
+top10 <- Total  %>%
+  filter(rank<=10) 
+
+
+ptop10 <- merge(alldata, top10, by="Country")
+  
+plottop10 <-ggplot(top10 , aes(x=reorder(Country,Total), y=Total)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity",fill = 'steelblue', colour = 'darkred') + ylab("Medal Sum") +geom_text(mapping = aes(label = Total))
+
+set.seed(1)
+plotbygsb <-ggplot(ptop10, aes(x=Country, y=Number, fill=Medal))  + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity")   + ylab("Medal sum by gsb")+scale_fill_brewer(palette = 'Accent')+geom_text(mapping = aes(label = Number))
+
+top10 
+ptop10
+plottop10
+plotbygsb
+```
+show the trend of total numbers of medals over time of top 10 countries.
+and compare
+this one in more easier to see through and find the differences
+```{r}
+library("ggthemes")
+
+pyear <- mydata  %>% 
+     group_by(Country,Year)  %>% 
+     dplyr::summarise(Number = n())
+
+ptop10year <- merge(pyear, top10, by="Country")
+
+
+pptop10year <- ggplot(ptop10year, aes(Year, Number)) +
+  geom_line(aes(color=Country, group=Country)) + ylab("Medal Sum") +
+  theme_tufte()
+
+pyear 
+ptop10year
+pptop10year
+```
+
+2. Medal Counts adjusted by Population  GDP
+Just consider gold medals.
+```{r}
+
+dbyPopulationGDP <- merge(Total, dictionary, by="Country") %>%
+  dplyr::mutate(dividedbyPopulation=Total/Population*1000000) %>%
+  dplyr::arrange(desc(dividedbyPopulation)) %>%
+  dplyr::mutate(rankbyPopulation=row_number()) %>%
+  dplyr::mutate(dividedbyGDP=Total/GDP.per.Capita*1000000) %>%
+  dplyr::arrange(desc(dividedbyGDP)) %>%
+  dplyr::mutate(rankbyGDP=row_number()) 
+
+dbyPopulationGDP
+
+top10bypop <- dbyPopulationGDP %>% filter(rankbyPopulation<=10)  %>%
+  arrange(desc(dividedbyPopulation))
+top10bypop
+
+set.seed(1234)
+ptop10bypop <-ggplot(top10bypop, aes(x=reorder(Country,dividedbyPopulation), y=dividedbyPopulation)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity",fill = 'steelblue', colour = 'darkred') +
+ ylab("byPopulation") 
+ptop10bypop
+
+top10bydpg <- dbyPopulationGDP %>% filter(rankbyGDP<=10)  %>%
+  arrange(desc(dividedbyPopulation))
+top10bydpg
+
+ptop10bygdp <-ggplot(top10bydpg, aes(x=reorder(Country,dividedbyGDP), y=dividedbyGDP)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity",fill = 'steelblue', colour = 'darkred') +
+ ylab("byGDP") 
+ptop10bygdp
+
+
+```
+medal by country
+```{r}
+pbymedal <- ggplot(alldata, aes(x=Country, y=Number, fill=Country,label=Medal)) +
+  geom_bar(width = 1,stat="identity") +
+  coord_polar(theta = "y") +
+  theme_bw() +
+  guides(fill=guide_legend(title = "Country")) +
+  theme(axis.text.y= element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x= element_blank(),
+        axis.title.y= element_blank(),
+)
+pbymedal
+```
+
+```{r}
+a<- merge(top10bypop, ptop10year, by="Country")
+a [!duplicated(a[c(0:10 )]),]
+
+
+
+ggplot(a)+geom_density(aes(x=Country, colour=Population))
+ggplot(a)+geom_density(aes(x=Country, colour=GDP.per.Capita))
+
+```
+
+3. Host Country Advantage
+it shows the host country has advantages
+```{r}
+library(tidyr)
+library(rvest)
+library(stringr)
+library(plyr)
+library("ggthemes")
+
+wiki_hosts <- read_html("https://en.wikipedia.org/wiki/Winter_Olympic_Games")
+hosts <- html_table(html_nodes(wiki_hosts, "table")[[5]], fill=TRUE)
+hosts <- hosts[-1,1:3]
+hosts$city <- str_split_fixed(hosts$Host, n=2, ",")[,1]
+hosts$country <- str_split_fixed(hosts$Host, n=2, ",")[,2]
+
+
+hosts$city<- revalue(hosts$city, c("St. Moritz" ="St.Moritz","Garmisch-Partenkirchen"= "Garmisch Partenkirchen"))
+
+dpaverage <- pyear %>% 
+  group_by(Country) %>% 
+  mutate(Number_average_by_Year=sum(Number)/19) 
+dpaverage <- unite(dpaverage, "Country_Year", Country, Year,remove = FALSE)
+
+
+dpaverage$host <-dpaverage$Country_Year %in% c("France_1924","Switzerland_1928","United States_1932","Germany_1936","Switzerland_1948","Norway_1952","Italy_1956","United States_1960","Austria_1964","France_1968","Japan_1972","Austria_1976","United States_1980","Yugoslavia_1984","Canada_1988","France_1992","Norway_1994","Japan_1998","United States_2002","Italy_2006","Canada_2010","Russia_2014")
+
+dpaverage
+
+ggplot(dpaverage, aes(Year, Number))  +
+  geom_line(aes(color=Country, group=Country)) + ylab("Medal Sum") +
+  theme_tufte()
+
+
+ggplot(dpaverage, aes(x=Year, y=Country)) + geom_point(alpha = 0.5, size = 1,aes(fill = host, colour=host)) 
+```
+
+
+
+
+ 4. Country success by sport / discipline / event
+ I play Snowboard too. so I chose Snowboard to show the data
+ I count the medal won by countries and present by pie pic
+```{r}
+dSnowboard <- mydata  %>%
+  filter(Discipline == "Snowboard") %>% 
+  group_by(Country)  %>%
+  dplyr::summarise(SnowboardMedalbyCountry = n()) %>%
+  dplyr::mutate(Snowboardmedalsum=sum(SnowboardMedalbyCountry))  %>%
+  dplyr::mutate(SnowboardMedalratio=SnowboardMedalbyCountry/Snowboardmedalsum)  %>%
+  arrange(desc(SnowboardMedalratio))  
+  
+pSnowboard <-ggplot(dSnowboard, aes(x=Country, y=SnowboardMedalratio)) + geom_point(alpha = 1, size = 2)+ ylab("Ratio") 
+
+
+ggplot(dSnowboard, aes(x = "", y = SnowboardMedalratio, fill = Country)) + 
+  geom_bar(stat = "identity") + 
+  coord_polar(theta = "y")
+
+dSnowboard
+pSnowboard
+
+```
+
+
+
+5. Most successful athletes 
+he won the most medals in 15 years. 
+```{r}
+
+most_Successful_Athletes <- winter %>% 
+   group_by(Athlete,Country,Gender)  %>%
+    dplyr::summarise(Total_Medal_by_Athletes = n()) %>%
+    dplyr::arrange(desc(Total_Medal_by_Athletes))  
+
+most_Successful_Athletes[1,1]
+
+mostevent <- winter %>% 
+  filter(Athlete == "BJOERNDALEN, Ole Einar") %>%
+  group_by(Year,Medal)  %>%
+   dplyr::summarise(Totalmedal= n()) 
+
+gmost<-ggplot(mostevent, aes(x=Year, y=Totalmedal)) + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity",fill = 'steelblue', colour = 'darkred') +
+ ylab("Totalmedal") 
+
+gmost
+```
+
+
+6. Make two plots interactive
+which shows up how much medal(S) BJOERNDALEN, Ole Einar won in different table/every year
+which is easier for reader to zoom in the see the exact number
+```{r}
+library(devtools)
+library(plotly)
+
+ggplot(mostevent, aes(x=Year, y=Totalmedal,color = Year)) +  
+     geom_point() + theme(legend.position="none") +
+     facet_wrap(~ Year) + 
+     ggtitle("Medal(s)BJOERNDALEN, Ole Einar won through years ")
+
+ggplotly(plotbygsb)
+plotbygsb <-ggplot(ptop10, aes(x=Country, y=Number, fill=Medal))  + scale_y_continuous(expand = c(0,0)) +geom_bar(position="dodge",stat="identity")   + ylab("Medal sum by gsb")+scale_fill_brewer(palette = 'Accent')+geom_text(mapping = aes(label = Number))
+
+```
+
+
+7. Data Table
+
+this contains data about snowboard medals won by countries and a ratio of which country won the most of it
+because I play snowboard and I am very interested in it.
+we can do search among the countries, medals by country, and sort by the small errow.
+```{r}
+library(DT)
+datatable(dSnowboard) %>%
+    formatStyle('Country',  color = 'white', 
+                backgroundColor = 'blue', fontWeight = 'bold')
+
+dSnowboard %>%
+  datatable(
+    rownames = FALSE,
+    colnames = "Data of Snowboard medals",
+    filter = list(position = "top"),
+    options = list(
+      dom = "Bfrtip",
+      buttons = I("colvis"),
+      language = list(sSearch = "Filter:")
+    ),
+    extensions = c("Buttons", "Responsive")
+  )
+```
+
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,22 @@
+"0","incidents <- read.csv(""/Users/kk/Desktop/severe_incidents.csv"",header = TRUE, stringsAsFactors = FALSE)"
+"0","# Create the time interval of INCIDENT_DATE_TIME and ARRIVAL_DATE_TIME in seconds"
+"0","incidents$INCIDENT_DATE_TIME = as.POSIXct(incidents$INCIDENT_DATE_TIME, format = ""%m/%d/%Y %I:%M:%S %p"")"
+"0","incidents$ARRIVAL_DATE_TIME = as.POSIXct(incidents$ARRIVAL_DATE_TIME, format = ""%m/%d/%Y %I:%M:%S %p"")"
+"0","incidents$RESPONSE_TIME <- incidents$ARRIVAL_DATE_TIME - incidents$INCIDENT_DATE_TIME"
+"0","incidents <- incidents[c(""IM_INCIDENT_KEY"", ""PROPERTY_USE_DESC"",""INCIDENT_TYPE_DESC"", ""TOTAL_INCIDENT_DURATION"", ""RESPONSE_TIME"", ""Latitude"", ""Longitude"", ""BOROUGH_DESC"")]"
+"0","#install.packages(""rgdal"")"
+"0","library(rgdal)"
+"2","package ‘rgdal’ was built under R version 3.4.4"
+"2","rgdal: version: 1.2-18, (SVN revision 718)
+ Geospatial Data Abstraction Library extensions to R successfully loaded
+ Loaded GDAL runtime: GDAL 2.1.3, released 2017/20/01
+ Path to GDAL shared files: /Library/Frameworks/R.framework/Versions/3.4/Resources/library/rgdal/gdal
+ GDAL binary built with GEOS: FALSE 
+ Loaded PROJ.4 runtime: Rel. 4.9.3, 15 August 2016, [PJ_VERSION: 493]
+ Path to PROJ.4 shared files: /Library/Frameworks/R.framework/Versions/3.4/Resources/library/rgdal/proj
+ Linking to sp version: 1.2-7 
+"
+"0","nyc <- readOGR(""/Users/kk/Desktop/nyc_boro.geojson"",""OGRGeoJSON"", verbose=FALSE)"
+"0","#incidents<-incidents[(incidents$BOROUGH_DESC==c(""1 - Manhattan"",""2 - Bronx"",""3 - Staten Island"",""4 - Brooklyn"",""5 - Queens"") ),]"
+"0","incidents = subset(incidents, !is.na(Latitude))"
+"0","incidents"

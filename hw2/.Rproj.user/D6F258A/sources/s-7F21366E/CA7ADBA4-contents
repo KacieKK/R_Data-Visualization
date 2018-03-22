@@ -1,0 +1,317 @@
+---
+title: "Hw2"
+author: "Kacie Kang"
+date: "3/20/2018"
+output:
+  html_document:
+    keep_md: yes
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(leaflet)
+library(tidyverse)
+library(rqog)
+library(rgeos)
+library(ggmap)
+library(htmlwidgets)
+library(lubridate)
+library(RColorBrewer)
+library(raster)
+library(sf)
+```
+
+data prepration
+```{r}
+incidents <- read.csv("/Users/kk/Desktop/severe_incidents.csv",header = TRUE, stringsAsFactors = FALSE)
+
+# Create the time interval of INCIDENT_DATE_TIME and ARRIVAL_DATE_TIME in seconds
+incidents$INCIDENT_DATE_TIME = as.POSIXct(incidents$INCIDENT_DATE_TIME, format = "%m/%d/%Y %I:%M:%S %p")
+incidents$ARRIVAL_DATE_TIME = as.POSIXct(incidents$ARRIVAL_DATE_TIME, format = "%m/%d/%Y %I:%M:%S %p")
+incidents$RESPONSE_TIME <- incidents$ARRIVAL_DATE_TIME - incidents$INCIDENT_DATE_TIME
+
+incidents <- incidents[c("IM_INCIDENT_KEY", "PROPERTY_USE_DESC","INCIDENT_TYPE_DESC", "TOTAL_INCIDENT_DURATION", "RESPONSE_TIME", "Latitude", "Longitude", "BOROUGH_DESC")]
+
+#install.packages("rgdal")
+library(rgdal)
+nyc <- readOGR("/Users/kk/Desktop/nyc_boro.geojson","OGRGeoJSON", verbose=FALSE)
+
+#incidents<-incidents[(incidents$BOROUGH_DESC==c("1 - Manhattan","2 - Bronx","3 - Staten Island","4 - Brooklyn","5 - Queens") ),]
+incidents = subset(incidents, !is.na(Latitude))
+
+#incidents
+
+# Merge the QoG data to Shape Files
+incidents$BoroCode <- "5" 
+incidents$BoroCode[incidents$BOROUGH_DESC=="1 - Manhattan"] <- "1" 
+incidents$BoroCode[incidents$BOROUGH_DESC=="2 - Bronx"] <- "2" 
+incidents$BoroCode[incidents$BOROUGH_DESC=="4 - Brooklyn"] <- "3" 
+incidents$BoroCode[incidents$BOROUGH_DESC=="5 - Queens"] <- "4" 
+incidents$BoroCode[incidents$BOROUGH_DESC=="3 - Staten Island"] <- "5" 
+
+
+
+nyc@data <- data.frame(incidents, nyc@data[match(incidents[,"BoroCode"], nyc@data[,"BoroCode"]),])
+
+```
+
+
+Provide a leaflet map of the severe fires contained in the file severe_incidents.csv. Ignore locations that fall outside the five boroughs of New York City. 
+
+Provide at least three pieces of information on the incident in a popup.
+
+```{r}
+
+# Contents shows in popup
+popcontent <- paste("INCIDENT TYPE:",incidents$INCIDENT_TYPE_DESC,"<br/>",
+                 "PROPERTY TYPE:",incidents$PROPERTY_USE_DESC,"<br/>",
+                 "Duration:",signif(incidents$TOTAL_INCIDENT_DURATION/60,0),"mins","<br/>",
+                 "Latitude,Longitude:",incidents$Latitude,
+                 incidents$Longitude,"<br/>"
+                 )
+
+# Draw a simple map of the severe fires contained in the file severe_incidents.csv.
+Severe_Fires0 <- leaflet(nyc) %>% 
+     addTiles('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png') %>%
+     setView(-73.9949344, 40.7179112, zoom = 10) 
+
+Severe_Fires1 <- Severe_Fires0 %>% 
+     addCircles(lng = ~Longitude, lat = ~Latitude, popup = popcontent, col="red")
+
+Severe_Fires1
+
+```
+
+2. Layers and Clusters
+a) Color by Type of Property
+
+```{r}
+
+# prepare the data
+PROPERTY <- incidents$PROPERTY_USE_DESC
+
+incidents$PROPERTY_CATEGORY <- "Other Areas" 
+
+incidents$PROPERTY_CATEGORY[PROPERTY=="429 - Multifamily dwelling"] <- "Multifamily dwelling" 
+incidents$PROPERTY_CATEGORY[PROPERTY=="419 - 1 or 2 family dwelling"] <- "1 or 2 family dwelling" 
+incidents$PROPERTY_CATEGORY[PROPERTY=="500 - Mercantile, business, other" | 
+                   PROPERTY=="599 - Business office"] <- "Business Related Areas" 
+incidents$PROPERTY_CATEGORY[PROPERTY=="161 - Restaurant or cafeteria" | 
+                   PROPERTY=="519 - Food and beverage sales, grocery store"] <- "Food Ralated Areas"
+incidents$PROPERTY_CATEGORY[PROPERTY=="900 - Outside or special property, other" | 
+                   PROPERTY=="931 - Open land or field" | 
+                   PROPERTY=="962 - Residential street, road or residential driveway" | 
+                   PROPERTY=="960 - Street, other" | 
+                   PROPERTY=="881 - Parking garage, (detached residential garage)"] <- "Food Ralated Areas"
+incidents$PROPERTY_CATEGORY[PROPERTY=="174 - Rapid transit station" | 
+                   PROPERTY=="210 - Schools, non-adult, other"] <- "Public Areas"  
+
+# incidents$PROPERTY_CATEGORY
+
+#update contents of popup
+popcontent2 <- paste("INCIDENT TYPE:",incidents$INCIDENT_TYPE_DESC,"<br/>",
+                     "PROPERTY CATEGORY:",incidents$PROPERTY_CATEGORY,"<br/>",
+                 "PROPERTY TYPE:",incidents$PROPERTY_USE_DESC,"<br/>",
+                 "Duration:",signif(incidents$TOTAL_INCIDENT_DURATION/60,0),"mins","<br/>",
+                 "Latitude&Longitude:",incidents$Latitude, incidents$Longitude,"<br/>"
+                 )
+
+pal = colorFactor("Set1", domain = incidents$PROPERTY_CATEGORY) 
+# palette
+color_PROPERTY_CATEGORY = pal(incidents$PROPERTY_CATEGORY)
+
+Severe_Fires2a  <- Severe_Fires0 %>%
+  addCircles(lng = ~Longitude, lat = ~Latitude, 
+             popup = popcontent2, 
+             col=color_PROPERTY_CATEGORY) %>%
+  addLegend("bottomright",
+            pal = pal, 
+            values = ~incidents$PROPERTY_CATEGORY, 
+            title = "Affected Property Catagories",
+            opacity = 0.25)
+
+Severe_Fires2a
+
+```
+
+```{r}
+
+Severe_Fires2b  <- Severe_Fires0 %>%
+  addCircleMarkers(lng = ~Longitude, lat = ~Latitude, 
+             popup = popcontent2, 
+             col=color_PROPERTY_CATEGORY,
+             clusterOptions = markerClusterOptions()) %>%
+  
+  addLegend("bottomright",
+            pal = pal, 
+            values = ~incidents$PROPERTY_CATEGORY, 
+            title = "Affected Property Catagories",
+            opacity = 0.25)
+
+Severe_Fires2b
+
+```
+
+3. Fire Houses
+The second data file contains the locations of the 218 firehouses in New York City. Start with the non-clustered map (2b) and now adjust the size of the circle markers by severity (TOTAL_INCIDENT_DURATION or UNITS_ONSCENE seem plausible options). More severe incidents should have larger circles on the map. On the map, also add the locations of the fire houses. Add two layers ("Incidents", "Firehouses") that allow the user to select which information to show.
+
+```{r}
+#collecting data
+fireshouses <- read.csv("/Users/kk/Desktop/FDNY_Firehouse_Listing.csv",header = TRUE, stringsAsFactors = FALSE)
+#fireshouses
+popcontent3 <- paste("Facility Name:",fireshouses$FacilityName,"<br/>",
+                 "Facility Address:",fireshouses$FacilityAddress,"<br/>",
+                 "Borough:",fireshouses$Borough,"<br/>")
+
+Severe_Fires3 <- leaflet(nyc) %>% 
+ setView(-73.8, 40.8, zoom = 10) %>%
+  
+addTiles('http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png') %>%
+  
+addCircles(group="Incidents", 
+           weight=0, radius=~incidents$TOTAL_INCIDENT_DURATION/100, fillOpacity=0.6,
+           lng = ~Longitude, lat = ~Latitude,
+           popup = popcontent2,
+           col=color_PROPERTY_CATEGORY) %>%
+addLegend(group="Incidents",
+          "bottomright",
+          pal = pal,
+          values = ~incidents$PROPERTY_CATEGORY,
+          title = "Affected Property Catagories",
+          opacity = 0.25)  %>%
+  
+# Add data layers - Fireshouses
+addCircles(group = "Fireshouses",
+           data = fireshouses,
+           lng = ~Longitude, lat = ~Latitude,
+           popup = popcontent3,
+           col="red") %>%
+addMarkers(group = "Fireshouses", 
+           data=fireshouses) %>%
+  
+# Layers 
+addLayersControl(overlayGroups = c("Incidents","Fireshouses"),
+options = layersControlOptions(collapsed = TRUE) )  
+
+Severe_Fires3
+
+
+```
+
+
+ 4. Distance from Firehouse and Response Time
+README
+!!!
+there are still some bugs in 4(a), I am about to calculate the min distance of it, but I dont have more time to fix them, please take a look at the codes and if could, give partial credits. 
+Sorry for the inconvenience.
+Thank you so much
+!!!
+
+```
+
+list1 <- data.frame(ID = 1:nrow(incidents), longitude = incidents$Latitude,latitude =incidents$Longitude)
+list2 <- data.frame(ID = 1:nrow(fireshouses), longitude = fireshouses$Latitude, latitude=fireshouses$Longitude)
+
+list1[is.na(list1)] <- 0
+list2[is.na(list2)] <- 0
+
+#install.packages("data.table")
+library(data.table)
+library(geosphere)
+
+
+#df2$longitude.fix <- as.numeric(levels(df2$lon))[df2$lon]
+#df2$latitude.fix <- as.numeric(levels(df2$lat))[df2$lat]
+#df1$distance<-distHaversine(df1[,1:2], df2[,1:2])
+
+
+#list1$distance<-distHaversine(list1[,1:2], list2[,1:2])
+
+for (i in 1:nrow(incidents)) {
+
+  a<-as.numeric(list1$longitude[i])
+  b<-as.numeric(list1$Latitude[i])
+  for (i in 1:nrow(fireshouses)) {
+  c<-as.numeric(list2$longitude[i])
+  d<-as.numeric(list2$Latitude[i])
+  
+  list1$dist <- min(distm(c(a,b),c(c,d), fun = distHaversine))
+  }
+}
+
+
+incidents$near_dist <- list1$near_dist
+
+library(ggplot2)
+
+Severe_Fires4a  <- ggplot(subset(incidents, RESPONSE_TIME < 1000 & near_dist < 0.03), 
+                          aes(x =near_dist/1000, y = RESPONSE_TIME)) + 
+  geom_point(alpha=0.5, size=2) +
+  geom_smooth(lwd = 1, se = FALSE)+
+  ylab("RESPONSE_TIME(mins)") + 
+  xlab("Distance_to_Nearest_Firehouse (Euclidean distance of Latitude and Longitude)") + 
+  ggtitle("Distance from Nearest Firehouse and Response Time")+
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+Severe_Fires4a
+
+```
+
+
+
+
+
+
+
+
+```{r}
+
+popcontent4 <- paste("INCIDENT TYPE:",incidents$INCIDENT_TYPE_DESC,"<br/>",
+                 "PROPERTY CATEGORY:",incidents$PROPERTY_CATEGORY,"<br/>",
+                 "PROPERTY TYPE:",incidents$PROPERTY_USE_DESC,"<br/>",
+                 "Duration:",signif(incidents$TOTAL_INCIDENT_DURATION/60,0),"mins","<br/>",
+                 "Latitude&Longitude:",incidents$Latitude, incidents$Longitude,"<br/>",
+                 "RESPONSE TIME(mins):", incidents$RESPONSE_TIME,"<br/>")
+
+pal = colorFactor("Set1", domain = incidents$PROPERTY_CATEGORY) # Grab a palette
+color_PROPERTY_CATEGORY = pal(incidents$PROPERTY_CATEGORY)
+
+Severe_Fires4b  <- Severe_Fires0 %>%
+  addCircles(lng = ~Longitude, lat = ~Latitude,
+             radius=~incidents$RESPONSE_TIME,fillOpacity=0.4,
+             popup = popcontent4, 
+             col=color_PROPERTY_CATEGORY) %>%
+  addLegend("bottomright",
+            pal = pal, 
+            values = ~incidents$PROPERTY_CATEGORY, 
+            title = "Affected Property Catagories",
+            opacity = 0.25)
+
+Severe_Fires4b  
+
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

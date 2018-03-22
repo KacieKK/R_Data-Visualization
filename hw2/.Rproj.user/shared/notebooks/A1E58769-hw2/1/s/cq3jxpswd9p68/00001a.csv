@@ -1,0 +1,8 @@
+"0","# Merge the QoG data to Shape Files"
+"0","incidents$BoroCode <- ""5"" "
+"0","incidents$BoroCode[incidents$BOROUGH_DESC==""1 - Manhattan""] <- ""1"" "
+"0","incidents$BoroCode[incidents$BOROUGH_DESC==""2 - Bronx""] <- ""2"" "
+"0","incidents$BoroCode[incidents$BOROUGH_DESC==""4 - Brooklyn""] <- ""3"" "
+"0","incidents$BoroCode[incidents$BOROUGH_DESC==""5 - Queens""] <- ""4"" "
+"0","incidents$BoroCode[incidents$BOROUGH_DESC==""3 - Staten Island""] <- ""5"" "
+"0","nyc@data <- data.frame(incidents, nyc@data[match(incidents[,""BoroCode""], nyc@data[,""BoroCode""]),])"
